@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>PWA 图标生成器 — MyStudyLog</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h2 { margin-top: 0; color: #4A90D9; }
+    canvas { border: 1px solid #eee; border-radius: 8px; margin: 8px 0; }
+    button {
+      background: #4A90D9;
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      margin: 4px;
+    }
+    button:hover { background: #3a7bc8; }
+    .done { color: #52C41A; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>🎨 MyStudyLog — PWA 图标生成器</h1>
+  <p>请在电脑浏览器中打开此页面，生成所需图标并保存到 <code>public/</code> 文件夹中。</p>
+
+  <div class="card">
+    <h2>1. 生成 192×192 图标</h2>
+    <canvas id="c192" width="192" height="192"></canvas>
+    <br>
+    <button onclick="downloadIcon('c192', 'pwa-192x192.png')">下载 pwa-192x192.png</button>
+  </div>
+
+  <div class="card">
+    <h2>2. 生成 512×512 图标</h2>
+    <canvas id="c512" width="512" height="512"></canvas>
+    <br>
+    <button onclick="downloadIcon('c512', 'pwa-512x512.png')">下载 pwa-512x512.png</button>
+  </div>
+
+  <div class="card">
+    <h2>3. 生成 Maskable 512×512 图标</h2>
+    <p style="color:#999;font-size:13px">安全区域内的图标，适配 Android 自适应图标</p>
+    <canvas id="cm512" width="512" height="512"></canvas>
+    <br>
+    <button onclick="downloadIcon('cm512', 'pwa-maskable-512x512.png')">下载 pwa-maskable-512x512.png</button>
+  </div>
+
+  <div class="card">
+    <h2>4. 生成 Apple Touch Icon (180×180)</h2>
+    <canvas id="c180" width="180" height="180"></canvas>
+    <br>
+    <button onclick="downloadIcon('c180', 'apple-touch-icon.png')">下载 apple-touch-icon.png</button>
+  </div>
+
+  <script>
+    function drawIcon(canvasId, size, padding) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+
+      // 背景圆角矩形
+      const radius = size * 0.22;
+      const x = 0, y = 0, w = size, h = size;
+
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + w - radius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+      ctx.lineTo(x + w, y + h - radius);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+      ctx.lineTo(x + radius, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.fillStyle = '#4A90D9';
+      ctx.fill();
+
+      // 书籍 emoji 作为文字
+      const fontSize = size * 0.5;
+      ctx.font = `${fontSize}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('📚', size / 2, size / 2);
+    }
+
+    drawIcon('c192', 192);
+    drawIcon('c512', 512);
+    drawIcon('cm512', 512);
+    drawIcon('c180', 180);
+
+    function downloadIcon(canvasId, filename) {
+      const canvas = document.getElementById(canvasId);
+      canvas.toBlob(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    }
+  </script>
+</body>
+</html>
