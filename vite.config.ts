@@ -27,8 +27,8 @@ export default defineConfig({
         theme_color: '#4A90D9',
         background_color: '#f7f8fa',
         display: 'standalone',
-        start_url: '/',
-        scope: '/',
+        start_url: '/my-study-log/',
+        scope: '/my-study-log/',
         orientation: 'portrait',
         lang: 'zh-CN',
         icons: [
