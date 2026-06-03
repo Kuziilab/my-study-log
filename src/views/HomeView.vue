@@ -4,11 +4,42 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useSessionDatabase, useSubjectDatabase, useDailyTaskDatabase, useLongTermGoalDatabase } from '../composables/useDatabase'
 import { useBackground } from '../composables/useBackground'
+import { useBackup } from '../composables/useBackup'
 import { todayISO, formatDateCN, getDayName, formatDuration } from '../utils/date'
 import type { StudySession, Subject } from '../db/schema'
 
 const router = useRouter()
 const { getBg, setBg, removeBg } = useBackground()
+const { exportAllData, importData } = useBackup()
+
+// ====== 数据备份 ======
+const importFileInput = ref<HTMLInputElement>()
+const backingUp = ref(false)
+
+async function handleExport() {
+  try {
+    await exportAllData()
+    showToast('数据已导出')
+  } catch (e: any) {
+    showToast('导出失败: ' + (e?.message || '未知错误'))
+  }
+}
+
+async function handleImport(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  backingUp.value = true
+  try {
+    const result = await importData(file)
+    showToast(result.message)
+    if (result.success) {
+      setTimeout(() => window.location.reload(), 1000)
+    }
+  } finally {
+    backingUp.value = false
+    if (importFileInput.value) importFileInput.value.value = ''
+  }
+}
 
 // ====== 背景设置弹窗 ======
 const showBgSettings = ref(false)
@@ -384,6 +415,23 @@ function goToTimer() { router.push('/timer') }
         </div>
       </div>
     </van-popup>
+
+    <!-- ====== 数据备份 ====== -->
+    <div class="card-section mt-16">
+      <div class="card-section__title">💾 数据备份</div>
+      <p style="font-size:12px;color:#999;margin-bottom:12px">
+        导出备份文件保存到手机，即使清除浏览器数据也能恢复。
+      </p>
+      <div style="display:flex;gap:10px">
+        <van-button type="primary" round block icon="down" @click="handleExport">
+          导出备份
+        </van-button>
+        <van-button round block icon="up" @click="importFileInput?.click()" :loading="backingUp">
+          导入恢复
+        </van-button>
+        <input ref="importFileInput" type="file" accept=".json,application/json" style="display:none" @change="handleImport" />
+      </div>
+    </div>
   </div>
 </template>
 
