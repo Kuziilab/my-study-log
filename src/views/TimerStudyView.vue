@@ -3,12 +3,14 @@ import { ref, onMounted, watch } from 'vue'
 import { showDialog, showToast } from 'vant'
 import { useBackground } from '../composables/useBackground'
 import { useTimer } from '../composables/useTimer'
+import { useWakeLock } from '../composables/useWakeLock'
 import { useTimeValidation } from '../composables/useTimeValidation'
 import { useSessionDatabase, useSubjectDatabase } from '../composables/useDatabase'
 import { todayISO } from '../utils/date'
 import type { Subject, SubjectCategory } from '../db/schema'
 
 const timer = useTimer()
+const wakeLock = useWakeLock()
 const { getBg } = useBackground()
 const { isWithinAllowedWindow } = useTimeValidation()
 const { addSession } = useSessionDatabase()
@@ -75,7 +77,10 @@ function handleStart() {
   if (!check.valid) { showDialog({ title: '提示', message: check.message }); return }
   if (!timer.selectedSubject.value) { showDialog({ title: '提示', message: '请先选择科目' }); return }
   timer.start()
+  wakeLock.request() // 计时中保持屏幕常亮
 }
+function handlePause() { timer.pause(); wakeLock.release() }
+function handleResume() { timer.resume(); wakeLock.request() }
 function handleStop() { showSavePopup.value = true }
 async function handleSave() {
   const result = timer.stop()
@@ -86,14 +91,16 @@ async function handleSave() {
   } catch (e) { showToast('保存失败') }
   showSavePopup.value = false; note.value = ''
   showFocusOverlay.value = false; focusExitCount.value = 0
+  wakeLock.release()
 }
-function handleCancelSave() { timer.reset(); showSavePopup.value = false; note.value = ''; showFocusOverlay.value = false }
+function handleCancelSave() { timer.reset(); showSavePopup.value = false; note.value = ''; showFocusOverlay.value = false; wakeLock.release() }
 
 // ====== 专注模式退出 ======
 function handleFocusExitTap() {
   focusExitCount.value++
   if (focusExitCount.value >= focusExitTarget) {
     timer.pause()
+    wakeLock.release()
     showFocusOverlay.value = false
     focusExitCount.value = 0
     showToast('已退出专注模式')
@@ -143,8 +150,8 @@ function getFocusExitHint(): string {
         </template>
         <template v-else>
           <div class="timer-btn-group">
-            <van-button v-if="timer.status.value === 'running'" icon="pause-circle-o" round type="warning" size="large" @click="timer.pause()">暂停</van-button>
-            <van-button v-if="timer.status.value === 'paused'" icon="play-circle-o" round type="primary" size="large" @click="timer.resume()">继续</van-button>
+            <van-button v-if="timer.status.value === 'running'" icon="pause-circle-o" round type="warning" size="large" @click="handlePause">暂停</van-button>
+            <van-button v-if="timer.status.value === 'paused'" icon="play-circle-o" round type="primary" size="large" @click="handleResume">继续</van-button>
             <van-button icon="stop-circle-o" round type="danger" size="large" @click="handleStop">停止</van-button>
           </div>
         </template>

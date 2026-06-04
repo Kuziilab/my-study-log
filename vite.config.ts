@@ -31,6 +31,7 @@ export default defineConfig({
         scope: '/my-study-log/',
         orientation: 'portrait',
         lang: 'zh-CN',
+        categories: ['productivity', 'education'],
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -53,14 +54,40 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,woff2}'],
+        navigateFallback: '/my-study-log/',
         runtimeCaching: [
+          // 静态资源：构建产物带 hash，可永久缓存
+          {
+            urlPattern: /\.(?:js|css|woff2?|png|svg|ico|jpg)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'static-assets',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 90, // 90天
+              },
+            },
+          },
+          // 导航请求：HTML 页面，优先网络，离线时回退缓存
+          {
+            urlPattern: /\/my-study-log\/.*/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'pages-cache',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7天
+              },
+            },
+          },
+          // 其他请求：网络优先
           {
             urlPattern: /^https?.*/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'app-cache',
               expiration: {
-                maxEntries: 200,
+                maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
             },

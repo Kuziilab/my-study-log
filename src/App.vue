@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 
 const route = useRoute()
+const router = useRouter()
 
 // ====== PWA 更新提示 ======
 const showUpdate = ref(false)
@@ -39,6 +40,11 @@ const tabs = [
 const activeTab = computed(() => tabs.findIndex(t => t.path === route.path))
 const showTabbar = ref(true)
 const hideTabbarRoutes = ['sessions', 'subjects', 'notes', 'note-new', 'note-edit', 'diary']
+
+function onTabChange(index: number) {
+  const tab = tabs[index]
+  if (tab) router.push(tab.path)
+}
 
 watch(() => route.name, (name) => {
   showTabbar.value = !hideTabbarRoutes.includes(name as string)
@@ -85,13 +91,12 @@ const themeVars = {
       :model-value="activeTab"
       :placeholder="true"
       :safe-area-inset-bottom="true"
-      route
       active-color="#E8738A"
+      @change="onTabChange"
     >
       <van-tabbar-item
         v-for="tab in tabs"
         :key="tab.name"
-        :to="tab.path"
         :icon="tab.icon"
       >
         {{ tab.label }}
