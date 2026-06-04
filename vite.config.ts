@@ -7,7 +7,7 @@ import { VantResolver } from '@vant/auto-import-resolver'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/',
+  base: '/my-study-log/',
   plugins: [
     vue(),
     AutoImport({
@@ -27,8 +27,8 @@ export default defineConfig({
         theme_color: '#FFF5F6',
         background_color: '#FFF5F6',
         display: 'standalone',
-        start_url: '/',
-        scope: '/',
+        start_url: '/my-study-log/',
+        scope: '/my-study-log/',
         orientation: 'portrait',
         lang: 'zh-CN',
         icons: [
