@@ -79,7 +79,7 @@ async function handleBgFileUpload(e: Event) {
 }
 
 const { sessions, fetchByDate, deleteSession, addSession } = useSessionDatabase()
-const { subjects, fetchSubjects, addSubject } = useSubjectDatabase()
+const { subjects, fetchSubjects } = useSubjectDatabase()
 const { tasks, fetchByDate: fetchTasks, addTask, toggleTask, deleteTask, markTaskRecorded } = useDailyTaskDatabase()
 const { goals: longGoals, fetchGoals, addGoal: addLongGoal, deleteGoal: deleteLongGoal } = useLongTermGoalDatabase()
 
@@ -95,6 +95,10 @@ const TIME_PRESETS = [
   { label: '1小时', minutes: 60 },
   { label: '2小时', minutes: 120 },
 ]
+
+// ====== 计入统计 → 选择科目 ======
+const showSubjectPickPopup = ref(false)
+const pendingRecordTask = ref<any>(null)
 
 // ====== 长期目标 折叠 ======
 const showLongGoals = ref(false)
@@ -145,33 +149,22 @@ async function handleAddTask() {
 }
 
 // ====== 任务计入统计 ======
-async function handleRecordToStats(task: any) {
+function handleRecordToStats(task: any) {
   if (!task.durationMinutes || task.durationMinutes <= 0) return
-  // 找一个可用的科目：优先用已有的，否则自动创建"手动补录"
-  let subjectId: number
-  const existingSubject = subjects.value.find(s => s.name === '手动补录' && s.isActive)
-  if (existingSubject && existingSubject.id) {
-    subjectId = existingSubject.id
-  } else if (subjects.value.length > 0 && subjects.value[0].id) {
-    // 用第一个科目
-    subjectId = subjects.value[0].id
-  } else {
-    // 创建一个默认科目
-    try {
-      const newId = await addSubject({ name: '手动补录', category: 'other', color: '#8B8B83' })
-      await fetchSubjects()
-      subjectId = newId as number
-    } catch {
-      showToast('创建科目失败')
-      return
-    }
-  }
+  pendingRecordTask.value = task
+  fetchSubjects() // 刷新科目列表
+  showSubjectPickPopup.value = true
+}
+
+async function confirmRecordToStats(subject: Subject) {
+  if (!pendingRecordTask.value || !subject.id) return
+  const task = pendingRecordTask.value
 
   const now = new Date()
   const startTime = new Date(now.getTime() - task.durationMinutes * 60 * 1000).toISOString()
   try {
     await addSession({
-      subjectId,
+      subjectId: subject.id,
       date: todayISO(),
       startTime,
       endTime: now.toISOString(),
@@ -179,12 +172,13 @@ async function handleRecordToStats(task: any) {
       note: `来自任务：${task.title}`,
     })
     await markTaskRecorded(task.id!, todayISO())
-    // 刷新今日学习记录
     await fetchByDate(todayISO())
-    showToast('已计入统计')
+    showToast(`已计入「${subject.name}」`)
   } catch {
     showToast('计入失败')
   }
+  showSubjectPickPopup.value = false
+  pendingRecordTask.value = null
 }
 
 async function handleToggleTask(id: number) {
@@ -444,6 +438,34 @@ function goToTimer() { router.push('/timer') }
         </van-swipe-cell>
       </div>
     </div>
+
+    <!-- ====== 计入统计 → 选择科目弹窗 ====== -->
+    <van-popup v-model:show="showSubjectPickPopup" round position="bottom">
+      <div class="popup">
+        <h3 class="popup-title">计入哪个科目？</h3>
+        <div v-if="subjects.length === 0" class="task-empty" style="padding:24px">
+          还没有科目，先去「时钟」页面添加吧
+        </div>
+        <div v-else class="subject-list">
+          <van-cell
+            v-for="s in subjects"
+            :key="s.id"
+            :title="s.name"
+            @click="confirmRecordToStats(s)"
+          >
+            <template #icon>
+              <div class="dot" :style="{ backgroundColor: s.color }" />
+            </template>
+            <template #right-icon>
+              <van-icon name="arrow" color="#ccc" />
+            </template>
+          </van-cell>
+        </div>
+        <div class="popup-actions">
+          <van-button round block plain type="default" @click="showSubjectPickPopup = false">取消</van-button>
+        </div>
+      </div>
+    </van-popup>
 
     <!-- ====== 添加长期目标弹窗 ====== -->
     <van-popup v-model:show="showGoalPopup" round position="bottom">
