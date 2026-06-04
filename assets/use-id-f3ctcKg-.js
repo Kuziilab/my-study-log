@@ -1,1 +1,0 @@
-import{cn as e}from"./useDatabase-ByVfLAT4.js";var t=0;function n(){let{name:n=`unknown`}=e()?.type||{};return`${n}-${++t}`}export{n as t};
