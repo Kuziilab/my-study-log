@@ -1,8 +1,33 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { showToast } from 'vant'
 
 const route = useRoute()
+
+// ====== PWA 更新提示 ======
+const showUpdate = ref(false)
+
+function checkPwaUpdate() {
+  if ((window as any).__pwaNeedRefresh) {
+    showUpdate.value = true
+  }
+}
+
+function handleUpdate() {
+  const updateFn = (window as any).__pwaUpdate
+  if (updateFn) {
+    updateFn()
+    showToast('应用已更新')
+  }
+  showUpdate.value = false
+}
+
+onMounted(() => {
+  checkPwaUpdate()
+  // 每30秒检查一次更新
+  setInterval(checkPwaUpdate, 30000)
+})
 
 const tabs = [
   { name: 'home', path: '/', icon: 'home-o', label: '浅浅' },
@@ -72,6 +97,13 @@ const themeVars = {
         {{ tab.label }}
       </van-tabbar-item>
     </van-tabbar>
+
+    <!-- PWA 更新提示 -->
+    <div v-if="showUpdate" class="pwa-update-bar">
+      <span class="pwa-update-text">有新版本可用</span>
+      <van-button size="small" type="primary" round @click="handleUpdate">更新</van-button>
+      <van-icon name="close" size="18" color="#999" @click="showUpdate = false" />
+    </div>
   </van-config-provider>
 </template>
 
@@ -80,5 +112,28 @@ const themeVars = {
   flex: 1;
   overflow-y: auto;
   height: 100%;
+}
+
+/* PWA 更新提示条 */
+.pwa-update-bar {
+  position: fixed;
+  bottom: 70px;
+  left: 16px;
+  right: 16px;
+  z-index: 9990;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 10px 16px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+.pwa-update-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
 }
 </style>

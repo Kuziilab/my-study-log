@@ -7,7 +7,7 @@ import { VantResolver } from '@vant/auto-import-resolver'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/my-study-log/',
+  base: '/',
   plugins: [
     vue(),
     AutoImport({
@@ -18,17 +18,17 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      injectRegister: false,
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
       manifest: {
         name: '浅浅时钟',
         short_name: '浅浅时钟',
         description: '记录学习时间，追踪学习进度',
-        theme_color: '#4A90D9',
-        background_color: '#f7f8fa',
+        theme_color: '#FFF5F6',
+        background_color: '#FFF5F6',
         display: 'standalone',
-        start_url: '/my-study-log/',
-        scope: '/my-study-log/',
+        start_url: '/',
+        scope: '/',
         orientation: 'portrait',
         lang: 'zh-CN',
         icons: [
@@ -53,6 +53,19 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https?.*/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'app-cache',
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+            },
+          },
+        ],
       },
     }),
   ],

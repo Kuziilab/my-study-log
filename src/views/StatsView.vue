@@ -27,8 +27,10 @@ let trendChart: echarts.ECharts | null = null
 // ====== 加载数据 ======
 async function loadData() {
   loading.value = true
-  let start: string, end: string
+  let start = ''
+  let end = ''
   let label: string
+  let isAllTime = false
 
   if (activeTab.value === 0) {
     start = end = todayISO()
@@ -36,16 +38,21 @@ async function loadData() {
   } else if (activeTab.value === 1) {
     const r = getWeekRange(); start = r.start; end = r.end
     label = '本周'
-  } else {
+  } else if (activeTab.value === 2) {
     const r = getMonthRange(); start = r.start; end = r.end
     label = '本月'
+  } else {
+    isAllTime = true
+    label = '总计'
   }
 
   // 获取科目
   subjects.value = (await db.subjects.toArray()).filter(s => s.isActive)
 
   // 获取学习记录
-  const sessions = await db.sessions.where('date').between(start, end, true, true).toArray()
+  const sessions = isAllTime
+    ? await db.sessions.orderBy('date').toArray()
+    : await db.sessions.where('date').between(start, end, true, true).toArray()
   totalMinutes.value = sessions.reduce((s, r) => s + r.durationMinutes, 0)
   totalSessions.value = sessions.length
   studiedSubjects.value = new Set(sessions.map(s => s.subjectId)).size
@@ -60,18 +67,42 @@ async function loadData() {
     subjectStats.get(s.subjectId)!.minutes += s.durationMinutes
   }
 
-  // 每日趋势
+  // 每日/每月趋势
   const dailyMap = new Map<string, number>()
-  const startDate = new Date(start)
-  const endDate = new Date(end)
-  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-    dailyMap.set(d.toISOString().slice(0, 10), 0)
-  }
-  for (const s of sessions) { dailyMap.set(s.date, (dailyMap.get(s.date) || 0) + s.durationMinutes) }
 
-  // 日均
-  const days = Math.max(1, dailyMap.size)
-  avgDailyMinutes.value = Math.round(totalMinutes.value / days)
+  if (isAllTime) {
+    // 总计模式：按月汇总
+    for (const s of sessions) {
+      const monthKey = s.date.slice(0, 7) // YYYY-MM
+      dailyMap.set(monthKey, (dailyMap.get(monthKey) || 0) + s.durationMinutes)
+    }
+    // 填充中间空缺月份
+    if (sessions.length > 0) {
+      const dates = [...dailyMap.keys()].sort()
+      const firstMonth = new Date(dates[0] + '-01')
+      const lastMonth = new Date(dates[dates.length - 1] + '-01')
+      for (let d = new Date(firstMonth); d <= lastMonth; d.setMonth(d.getMonth() + 1)) {
+        const key = d.toISOString().slice(0, 7)
+        if (!dailyMap.has(key)) dailyMap.set(key, 0)
+      }
+    }
+    // 日均：使用最早记录到今天的总天数
+    const allDates = [...new Set(sessions.map(s => s.date))].sort()
+    const days = allDates.length > 0
+      ? Math.ceil((new Date().getTime() - new Date(allDates[0]).getTime()) / (1000 * 60 * 60 * 24)) + 1
+      : 1
+    avgDailyMinutes.value = Math.round(totalMinutes.value / Math.max(1, days))
+  } else {
+    // 日/周/月模式：按日汇总
+    const startDate = new Date(start)
+    const endDateQ = new Date(end)
+    for (let d = new Date(startDate); d <= endDateQ; d.setDate(d.getDate() + 1)) {
+      dailyMap.set(d.toISOString().slice(0, 10), 0)
+    }
+    for (const s of sessions) { dailyMap.set(s.date, (dailyMap.get(s.date) || 0) + s.durationMinutes) }
+    const days = Math.max(1, dailyMap.size)
+    avgDailyMinutes.value = Math.round(totalMinutes.value / days)
+  }
 
   // 先结束 loading，让 DOM 渲染出来
   loading.value = false
@@ -124,11 +155,11 @@ function renderTrendChart(dailyMap: Map<string, number>, _label: string) {
   trendChart.setOption({
     tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${Math.round(v)} 分钟` },
     grid: { left: 8, right: 12, top: 12, bottom: 24 },
-    xAxis: { type: 'category', data: entries.map(([d]) => d.slice(5)), axisLabel: { fontSize: 10, rotate: activeTab.value === 2 ? 30 : 0 } },
+    xAxis: { type: 'category', data: entries.map(([d]) => activeTab.value === 3 ? d : d.slice(5)), axisLabel: { fontSize: 10, rotate: activeTab.value === 3 ? 45 : activeTab.value === 2 ? 30 : 0 } },
     yAxis: { type: 'value', axisLabel: { fontSize: 11 } },
     series: [{
       type: 'bar', data: entries.map(([, v]) => ({ value: v, itemStyle: { color: '#6366f1', borderRadius: [4, 4, 0, 0] } })),
-      barMaxWidth: activeTab.value === 0 ? 48 : 18,
+      barMaxWidth: activeTab.value === 0 ? 48 : activeTab.value === 3 ? 24 : 18,
     }],
   }, true)
 }
@@ -183,6 +214,7 @@ const studiedSubjects = ref(0) // 实际学过的科目数
       <van-tab :name="0" title="日" />
       <van-tab :name="1" title="周" />
       <van-tab :name="2" title="月" />
+      <van-tab :name="3" title="全部" />
     </van-tabs>
 
     <div v-if="loading" style="text-align:center;padding:40px">
@@ -206,7 +238,7 @@ const studiedSubjects = ref(0) // 实际学过的科目数
 
       <!-- 趋势图 -->
       <div class="card-section">
-        <div class="card-section__title">📈 每日趋势</div>
+        <div class="card-section__title">📈 {{ activeTab === 3 ? '每月趋势' : '每日趋势' }}</div>
         <div ref="trendChartRef" class="chart-box"></div>
       </div>
     </div>
