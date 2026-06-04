@@ -31,6 +31,8 @@ export interface DailyTask {
   date: string // YYYY-MM-DD
   title: string
   completed: boolean
+  durationMinutes: number   // 手动填写花费时间（分钟），0 表示未设置
+  recordedToStats: boolean  // 是否已计入统计
   createdAt: string
   updatedAt: string
 }

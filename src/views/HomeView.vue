@@ -78,15 +78,23 @@ async function handleBgFileUpload(e: Event) {
   reader.readAsDataURL(file)
 }
 
-const { sessions, fetchByDate, deleteSession } = useSessionDatabase()
-const { subjects, fetchSubjects } = useSubjectDatabase()
-const { tasks, fetchByDate: fetchTasks, addTask, toggleTask, deleteTask } = useDailyTaskDatabase()
+const { sessions, fetchByDate, deleteSession, addSession } = useSessionDatabase()
+const { subjects, fetchSubjects, addSubject } = useSubjectDatabase()
+const { tasks, fetchByDate: fetchTasks, addTask, toggleTask, deleteTask, markTaskRecorded } = useDailyTaskDatabase()
 const { goals: longGoals, fetchGoals, addGoal: addLongGoal, deleteGoal: deleteLongGoal } = useLongTermGoalDatabase()
 
 const subjectMap = ref<Map<number, Subject>>(new Map())
 
 // ====== 每日任务 ======
 const newTaskTitle = ref('')
+const newTaskDuration = ref(0) // 0 = 不设置时间
+const TIME_PRESETS = [
+  { label: '不计时', minutes: 0 },
+  { label: '15分钟', minutes: 15 },
+  { label: '30分钟', minutes: 30 },
+  { label: '1小时', minutes: 60 },
+  { label: '2小时', minutes: 120 },
+]
 
 // ====== 长期目标 折叠 ======
 const showLongGoals = ref(false)
@@ -128,10 +136,54 @@ async function handleAddTask() {
   const title = newTaskTitle.value.trim()
   if (!title) return
   try {
-    await addTask(title, todayISO())
+    await addTask(title, todayISO(), newTaskDuration.value)
     newTaskTitle.value = ''
+    newTaskDuration.value = 0
   } catch (e: any) {
     showToast('添加失败: ' + (e?.message || '未知'))
+  }
+}
+
+// ====== 任务计入统计 ======
+async function handleRecordToStats(task: any) {
+  if (!task.durationMinutes || task.durationMinutes <= 0) return
+  // 找一个可用的科目：优先用已有的，否则自动创建"手动补录"
+  let subjectId: number
+  const existingSubject = subjects.value.find(s => s.name === '手动补录' && s.isActive)
+  if (existingSubject && existingSubject.id) {
+    subjectId = existingSubject.id
+  } else if (subjects.value.length > 0 && subjects.value[0].id) {
+    // 用第一个科目
+    subjectId = subjects.value[0].id
+  } else {
+    // 创建一个默认科目
+    try {
+      const newId = await addSubject({ name: '手动补录', category: 'other', color: '#8B8B83' })
+      await fetchSubjects()
+      subjectId = newId as number
+    } catch {
+      showToast('创建科目失败')
+      return
+    }
+  }
+
+  const now = new Date()
+  const startTime = new Date(now.getTime() - task.durationMinutes * 60 * 1000).toISOString()
+  try {
+    await addSession({
+      subjectId,
+      date: todayISO(),
+      startTime,
+      endTime: now.toISOString(),
+      durationMinutes: task.durationMinutes,
+      note: `来自任务：${task.title}`,
+    })
+    await markTaskRecorded(task.id!, todayISO())
+    // 刷新今日学习记录
+    await fetchByDate(todayISO())
+    showToast('已计入统计')
+  } catch {
+    showToast('计入失败')
   }
 }
 
@@ -239,6 +291,18 @@ function goToTimer() { router.push('/timer') }
             <van-button size="small" type="primary" @click="handleAddTask">添加</van-button>
           </template>
         </van-field>
+        <!-- 花费时间选择 -->
+        <div class="task-time-presets">
+          <span
+            v-for="preset in TIME_PRESETS"
+            :key="preset.minutes"
+            class="time-preset"
+            :class="{ active: newTaskDuration === preset.minutes }"
+            @click="newTaskDuration = preset.minutes"
+          >
+            {{ preset.label }}
+          </span>
+        </div>
       </div>
 
       <!-- 任务列表 -->
@@ -258,8 +322,16 @@ function goToTimer() { router.push('/timer') }
               size="20"
             />
             <span class="task-title">{{ task.title }}</span>
+            <span v-if="task.durationMinutes > 0" class="task-duration-tag" :class="{ recorded: task.recordedToStats }">
+              {{ task.durationMinutes }}分钟{{ task.recordedToStats ? ' ✓' : '' }}
+            </span>
           </div>
           <template #right>
+            <van-button
+              v-if="task.durationMinutes > 0 && !task.recordedToStats"
+              square type="primary" text="计入统计"
+              @click="handleRecordToStats(task)"
+            />
             <van-button square type="danger" text="删除" @click="handleDeleteTask(task.id!)" />
           </template>
         </van-swipe-cell>
@@ -449,7 +521,14 @@ function goToTimer() { router.push('/timer') }
 .task-list { margin-top: 8px; }
 .task-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer; }
 .task-item.completed .task-title { text-decoration: line-through; color: #bbb; }
-.task-title { font-size: 14px; color: #333; }
+.task-title { font-size: 14px; color: #333; flex: 1; }
+/* 花费时间选择 */
+.task-time-presets { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.time-preset { padding: 4px 10px; border-radius: 14px; font-size: 12px; background: #f0f0f0; color: #888; cursor: pointer; transition: all 0.2s; }
+.time-preset.active { background: var(--c-primary-bg); color: var(--c-primary); font-weight: 600; }
+/* 耗时标签 */
+.task-duration-tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #e8f4fd; color: #4A90D9; white-space: nowrap; flex-shrink: 0; }
+.task-duration-tag.recorded { background: #f0f0f0; color: #999; }
 
 /* ====== 长期目标 ====== */
 .long-goal-header { cursor: pointer; display: flex; justify-content: space-between; align-items: center; }

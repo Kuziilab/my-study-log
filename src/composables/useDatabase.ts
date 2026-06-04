@@ -103,16 +103,25 @@ export function useDailyTaskDatabase() {
   async function fetchByDate(date: string) {
     loading.value = true
     const all = await db.dailyTasks.where('date').equals(date).toArray()
-    tasks.value = all.sort((a, b) => (a.id || 0) - (b.id || 0))
+    // 兼容旧数据：没有 durationMinutes 或 recordedToStats 的给默认值
+    tasks.value = all
+      .map(t => ({
+        ...t,
+        durationMinutes: t.durationMinutes ?? 0,
+        recordedToStats: t.recordedToStats ?? false,
+      }))
+      .sort((a, b) => (a.id || 0) - (b.id || 0))
     loading.value = false
   }
 
-  async function addTask(title: string, date: string): Promise<number> {
+  async function addTask(title: string, date: string, durationMinutes = 0): Promise<number> {
     const now = nowISO()
     const id = await db.dailyTasks.add({
       date,
       title,
       completed: false,
+      durationMinutes,
+      recordedToStats: false,
       createdAt: now,
       updatedAt: now,
     })
@@ -133,7 +142,13 @@ export function useDailyTaskDatabase() {
     await fetchByDate(date)
   }
 
-  return { tasks, loading, fetchByDate, addTask, toggleTask, deleteTask }
+  /** 标记任务已计入统计 */
+  async function markTaskRecorded(id: number, date: string) {
+    await db.dailyTasks.update(id, { recordedToStats: true, updatedAt: nowISO() })
+    await fetchByDate(date)
+  }
+
+  return { tasks, loading, fetchByDate, addTask, toggleTask, deleteTask, markTaskRecorded }
 }
 
 // ========== 长期目标 CRUD ==========
