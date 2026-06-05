@@ -2,8 +2,9 @@
 import { ref, onMounted, onActivated, computed, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { useDiaryDatabase, useCountdownDatabase } from '../composables/useDatabase'
-import { todayISO } from '../utils/date'
+import { useDiaryDatabase, useCountdownDatabase, useSessionDatabase, useSubjectDatabase } from '../composables/useDatabase'
+import { todayISO, formatDuration } from '../utils/date'
+import type { Subject } from '../db/schema'
 
 const router = useRouter()
 
@@ -14,6 +15,11 @@ const calDefaultDate = new Date()
 
 const { entries, fetchByDate, getDatesWithEntries } = useDiaryDatabase()
 const { countdown, fetchCountdown, saveCountdown, deleteCountdown } = useCountdownDatabase()
+const { sessions, fetchByDate: fetchSessions } = useSessionDatabase()
+const { subjects, fetchSubjects } = useSubjectDatabase()
+
+// 科目映射
+const subjectMap = ref<Map<number, Subject>>(new Map())
 
 // ====== 日历 ======
 const calendarDate = ref(todayISO())
@@ -41,11 +47,13 @@ async function onDateConfirm(value: any) {
   calendarDate.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   calendarShow.value = false
   await fetchByDate(calendarDate.value)
+  await fetchSessions(calendarDate.value)
 }
 
 async function loadData() {
-  await Promise.all([fetchByDate(calendarDate.value), fetchCountdown()])
+  await Promise.all([fetchByDate(calendarDate.value), fetchCountdown(), fetchSessions(calendarDate.value), fetchSubjects()])
   diaryDates.value = await getDatesWithEntries()
+  subjectMap.value = new Map(subjects.value.map(s => [s.id!, s]))
 }
 
 onMounted(loadData)
@@ -112,7 +120,11 @@ const currentEntry = computed(() => entries.value[0] || null)
 function goToToday() {
   calendarDate.value = todayISO()
   fetchByDate(calendarDate.value)
+  fetchSessions(calendarDate.value)
 }
+
+function getSubjectName(id: number) { return subjectMap.value.get(id)?.name || '未知' }
+function getSubjectColor(id: number) { return subjectMap.value.get(id)?.color || '#999' }
 
 </script>
 
@@ -211,6 +223,30 @@ function goToToday() {
         </div>
         <div class="diary-card__preview">
           {{ (currentEntry.content || '').replace(/<[^>]+>/g, '').slice(0, 120) }}{{ (currentEntry.content || '').replace(/<[^>]+>/g, '').length > 120 ? '...' : '' }}
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 该日学习记录 ====== -->
+    <div class="card-section session-section" style="margin-top:14px">
+      <div class="card-section__title">📝 该日学习记录</div>
+      <div v-if="sessions.length === 0" class="task-empty">
+        这天还没有学习记录
+      </div>
+      <div v-else>
+        <div
+          v-for="session in sessions"
+          :key="session.id"
+          class="session-item"
+          :style="{ borderLeftColor: getSubjectColor(session.subjectId) }"
+        >
+          <div class="session-item__top">
+            <van-tag :color="getSubjectColor(session.subjectId)" size="medium">
+              {{ getSubjectName(session.subjectId) }}
+            </van-tag>
+            <span class="session-item__duration">{{ formatDuration(session.durationMinutes) }}</span>
+          </div>
+          <div v-if="session.note" class="session-item__note">{{ session.note }}</div>
         </div>
       </div>
     </div>
@@ -349,6 +385,13 @@ function goToToday() {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ====== 学习记录 ====== */
+.session-item { background: #fafbfc; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; border-left: 4px solid #4A90D9; }
+.session-item__top { display: flex; justify-content: space-between; align-items: center; }
+.session-item__duration { font-weight: 600; color: #333; font-size: 15px; }
+.session-item__note { font-size: 12px; color: #999; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.task-empty { text-align: center; color: #bbb; padding: 16px 0; font-size: 13px; }
 
 /* ====== 弹窗 ====== */
 .goal-popup { padding: 20px 16px 30px; }
